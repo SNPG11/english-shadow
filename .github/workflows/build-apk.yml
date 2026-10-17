@@ -2,7 +2,7 @@ name: Build APK
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, master ]
   workflow_dispatch:
 
 jobs:
@@ -24,11 +24,7 @@ jobs:
           java-version: 17
 
       - name: Install dependencies
-        run: |
-          # 清理可能存在的旧缓存
-          npm cache clean --force
-          # 使用 npm ci 进行干净安装，确保与 lockfile 一致
-          npm ci
+        run: npm install
 
       - name: Add Android platform
         run: npx cap add android
@@ -48,4 +44,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: english-shadow-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
           path: android/app/build/outputs/apk/debug/app-debug.apk

@@ -2,7 +2,7 @@ name: Build APK
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
@@ -16,6 +16,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: 'npm'   # 新增：缓存依赖，加速后续构建
 
       - name: Setup JDK
         uses: actions/setup-java@v4
@@ -24,7 +25,11 @@ jobs:
           java-version: 17
 
       - name: Install dependencies
-        run: npm install
+        run: |
+          # 清理可能存在的旧缓存
+          npm cache clean --force
+          # 使用 npm ci 进行干净安装，确保与 lockfile 一致
+          npm ci
 
       - name: Add Android platform
         run: npx cap add android
@@ -36,8 +41,6 @@ jobs:
         run: |
           MANIFEST=android/app/src/main/AndroidManifest.xml
           sed -i 's|<application|<uses-permission android:name="android.permission.RECORD_AUDIO" />\n    <queries>\n        <intent>\n            <action android:name="android.speech.RecognitionService" />\n        </intent>\n        <intent>\n            <action android:name="android.intent.action.TTS_SERVICE" />\n        </intent>\n    </queries>\n    <application|' $MANIFEST
-          echo "----- AndroidManifest.xml 前 30 行 -----"
-          head -30 $MANIFEST
 
       - name: Build APK
         run: cd android && chmod +x gradlew && ./gradlew assembleDebug

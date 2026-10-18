@@ -105,7 +105,7 @@ const DATA = {
 };
 
 const $ = id => document.getElementById(id);
-let mode='sentence', idx=0, cur=null, transcript='', recognizing=false, startedAt=0;
+let mode='sentence', idx=0, cur=null, transcript='', recognizing=false;
 const stats = { done:0, sum:0 };
 
 const normWord = w => w.toLowerCase().replace(/[^a-z0-9']/g,'').replace(/'/g,'');
@@ -190,33 +190,9 @@ function setMicUI(on){
   $('micBtn').textContent = on ? '🎙 正在听…' : '🎤 开始跟读';
 }
 
+// 原生模式不再需要事件监听，直接通过 start 返回值获取结果
 async function initNativeRecognition(){
   if(!SRP) { $('tip').textContent='原生识别插件未加载'; return; }
-
-  await SRP.addListener('partialResults', data=>{
-    // 兼容 data.matches 和 data.value 两种返回格式
-    const matchText = data.matches ? data.matches[0] : (data.value || '');
-    if(matchText){
-      transcript = matchText;
-      $('status').textContent = '识别中：' + transcript;
-    }
-  });
-
-  await SRP.addListener('listeningState', data=>{
-    if(data.status === 'started'){
-      recognizing = true; setMicUI(true); $('status').textContent='请朗读';
-    } else if(data.status === 'stopped'){
-      recognizing = false; setMicUI(false);
-      if(transcript.trim()) evaluate(transcript);
-      else if($('status').textContent === '请朗读') $('status').textContent='没有识别到语音';
-    }
-  });
-
-  await SRP.addListener('error', (err) => {
-    console.error('识别报错:', err);
-    recognizing = false; setMicUI(false);
-    $('status').textContent = '识别报错：' + (err.message || JSON.stringify(err));
-  });
 }
 
 async function startRecognition(){
@@ -230,20 +206,25 @@ async function startRecognition(){
         return;
       }
       
-      const avail = await SRP.available();
-      if(!avail.available){
-        $('status').textContent='本机语音识别引擎不可用';
-        return;
-      }
+      $('status').textContent = '请在弹出的窗口中说话';
       
-      if(recognizing){
-        await SRP.stop().catch(()=>{});
-        return;
+      // 使用系统原生弹窗，关闭 partialResults，直接拿最终结果
+      const result = await SRP.start({
+        language: 'en-US',
+        maxResults: 1,
+        partialResults: false,  // 关键：必须关闭
+        popup: true             // 关键：启用系统弹窗
+      });
+      
+      // 弹窗结束后判断结果
+      if (result && result.matches && result.matches.length > 0) {
+        transcript = result.matches[0];
+        evaluate(transcript);
+      } else {
+        $('status').textContent = '没有识别到语音';
       }
-      // 修复：popup 为 false 防止闪退
-      await SRP.start({ language:'en-US', maxResults:1, partialResults:true, popup:false });
     }catch(e){
-      $('status').textContent = '识别启动失败：' + (e.message||e);
+      $('status').textContent = '识别失败：' + (e.message||e);
     }
     return;
   }

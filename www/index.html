@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>英语跟读</title>
+<style>
+  :root{--bg:#0f172a;--card:#1e293b;--line:#334155;--text:#e2e8f0;--muted:#94a3b8;
+        --primary:#38bdf8;--ok:#22c55e;--bad:#f87171;--warn:#fbbf24}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;min-height:100vh;background:radial-gradient(1200px 600px at 50% -10%,#1e3a5f,var(--bg));
+       color:var(--text);font-family:-apple-system,"Segoe UI",Roboto,"PingFang SC",sans-serif;
+       display:flex;justify-content:center;padding:20px 14px calc(20px + env(safe-area-inset-bottom))}
+  .app{width:100%;max-width:680px}
+  header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:10px}
+  h1{font-size:19px;margin:0;white-space:nowrap}
+  .tabs{display:flex;gap:4px;background:var(--card);padding:4px;border-radius:12px;border:1px solid var(--line)}
+  .tab{padding:6px 13px;border-radius:9px;border:0;background:transparent;color:var(--muted);cursor:pointer;font-size:14px}
+  .tab.active{background:var(--primary);color:#04263a;font-weight:600}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px;margin-bottom:14px}
+  .progress{font-size:13px;color:var(--muted);margin-bottom:12px;display:flex;justify-content:space-between;gap:10px;min-height:18px}
+  .target{font-size:27px;line-height:1.55;font-weight:600;min-height:88px;word-break:break-word}
+  .target .hit{color:var(--ok)}
+  .target .miss{color:var(--bad);text-decoration:underline wavy}
+  .zh{color:var(--muted);font-size:14px;margin-top:10px;opacity:0;transition:.2s}
+  .zh.show{opacity:1}
+  .controls{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px;align-items:center}
+  .btn{border:1px solid var(--line);background:#273549;color:var(--text);padding:12px 17px;border-radius:12px;
+       font-size:15px;cursor:pointer;display:flex;align-items:center;gap:7px;transition:.15s;font-family:inherit}
+  .btn:active{transform:scale(.97)}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .btn.primary{background:var(--primary);color:#04263a;border-color:transparent;font-weight:600}
+  .btn.ghost{background:transparent}
+  .btn.rec{background:var(--bad);color:#fff;border-color:transparent;animation:pulse 1.2s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(248,113,113,.55)}70%{box-shadow:0 0 0 14px rgba(248,113,113,0)}100%{box-shadow:0 0 0 0 rgba(248,113,113,0)}}
+  .result{margin-top:18px;border-top:1px dashed var(--line);padding-top:15px;display:none}
+  .result.show{display:block}
+  .score{font-size:40px;font-weight:700;line-height:1}
+  .score.good{color:var(--ok)}.score.mid{color:var(--warn)}.score.bad{color:var(--bad)}
+  .heard{color:var(--muted);font-size:14px;margin-top:9px;word-break:break-word}
+  .heard b{color:var(--text)}
+  footer{display:flex;justify-content:space-between;font-size:13px;color:var(--muted);padding:0 6px}
+  select{background:#273549;color:var(--text);border:1px solid var(--line);border-radius:10px;padding:11px 8px;font-size:14px}
+  .tip{font-size:12px;color:var(--muted);text-align:center;margin-top:16px;line-height:1.7}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>🎧 英语跟读</h1>
+    <div class="tabs">
+      <button class="tab active" data-mode="sentence">句子</button>
+      <button class="tab" data-mode="word">单词</button>
+    </div>
+  </header>
+
+  <div class="card">
+    <div class="progress"><span id="progressText">1 / 6</span><span id="status"></span></div>
+    <div class="target" id="target"></div>
+    <div class="zh" id="zh"></div>
+    <div class="controls">
+      <button class="btn primary" id="playBtn">🔊 听原声</button>
+      <button class="btn" id="micBtn">🎤 开始跟读</button>
+      <button class="btn ghost" id="hintBtn">👁 中文</button>
+      <button class="btn ghost" id="nextBtn">下一个 →</button>
+      <select id="rateSel">
+        <option value="0.7">0.7x</option>
+        <option value="1" selected>1.0x</option>
+        <option value="1.2">1.2x</option>
+      </select>
+    </div>
+    <div class="result" id="result">
+      <div class="score" id="score">--</div>
+      <div class="heard" id="heard"></div>
+    </div>
+  </div>
+
+  <footer><span id="stats">已完成 0 题</span><span id="avg">平均分 --</span></footer>
+  <p class="tip" id="tip"></p>
+</div>
+
+<script>
+const isNative = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+const P = isNative ? window.Capacitor.Plugins : {};
+const TTS = P.TextToSpeech;
+const SRP = P.SpeechRecognition;
+
+const DATA = {
+  sentence: [
+    { en: "How are you doing today?",                zh: "你今天过得怎么样？" },
+    { en: "I would like a cup of coffee, please.",   zh: "请给我一杯咖啡。" },
+    { en: "Could you speak a little slower?",        zh: "你能说慢一点吗？" },
+    { en: "The weather is really nice this weekend.",zh: "这个周末天气真好。" },
+    { en: "I'm looking forward to meeting you.",     zh: "我很期待见到你。" },
+    { en: "Practice makes perfect.",                 zh: "熟能生巧。" }
+  ],
+  word: [
+    { en: "comfortable",   zh: "舒适的" },
+    { en: "schedule",      zh: "日程安排" },
+    { en: "opportunity",   zh: "机会" },
+    { en: "environment",   zh: "环境" },
+    { en: "technology",    zh: "科技" },
+    { en: "communication", zh: "沟通" }
+  ]
+};
+
+const $ = id => document.getElementById(id);
+let mode='sentence', idx=0, cur=null, transcript='', recognizing=false, startedAt=0;
+const stats = { done:0, sum:0 };
+
+const normWord = w => w.toLowerCase().replace(/[^a-z0-9']/g,'').replace(/'/g,'');
+const words = s => s.split(/\s+/).map(normWord).filter(Boolean);
+
+function lev(a,b){
+  const n=a.length,m=b.length;
+  if(!n)return m; if(!m)return n;
+  let prev=Array.from({length:m+1},(_,j)=>j);
+  for(let i=1;i<=n;i++){
+    const row=[i];
+    for(let j=1;j<=m;j++){
+      row[j]=Math.min(prev[j]+1,row[j-1]+1,prev[j-1]+(a[i-1]===b[j-1]?0:1));
+    }
+    prev=row;
+  }
+  return prev[m];
+}
+
+function lcsMark(tw,sw){
+  const n=tw.length,m=sw.length;
+  const dp=Array.from({length:n+1},()=>new Array(m+1).fill(0));
+  for(let i=n-1;i>=0;i--)
+    for(let j=m-1;j>=0;j--)
+      dp[i][j]=tw[i]===sw[j]?dp[i+1][j+1]+1:Math.max(dp[i+1][j],dp[i][j+1]);
+  const marks=new Array(n).fill(false);
+  let i=0,j=0;
+  while(i<n&&j<m){
+    if(tw[i]===sw[j]){marks[i]=true;i++;j++;}
+    else if(dp[i+1][j]>=dp[i][j+1])i++;
+    else j++;
+  }
+  return marks;
+}
+
+async function speak(){
+  const rate = parseFloat($('rateSel').value);
+  if(isNative && TTS){
+    try{
+      await TTS.stop().catch(()=>{});
+      await TTS.speak({ text: cur.en, lang:'en-US', rate });
+    }catch(e){
+      $('status').textContent = '朗读失败：' + (e.message||e);
+    }
+    return;
+  }
+  if(!('speechSynthesis' in window)){ $('status').textContent='浏览器不支持朗读'; return; }
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(cur.en);
+  u.lang='en-US'; u.rate=rate;
+  speechSynthesis.speak(u);
+}
+
+let recog = null;
+
+function initWebRecognition(){
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SR) return null;
+  const r = new SR();
+  r.lang='en-US'; r.interimResults=true; r.continuous=false; r.maxAlternatives=1;
+  r.onstart=()=>{ recognizing=true; transcript=''; setMicUI(true); $('status').textContent='请朗读'; };
+  r.onresult=e=>{
+    let t='';
+    for(let i=0;i<e.results.length;i++) t+=e.results[i][0].transcript;
+    transcript=t; $('status').textContent='识别中：'+t;
+  };
+  r.onerror=e=>{
+    const map={'not-allowed':'没有麦克风权限','service-not-allowed':'识别服务被禁用',
+               'no-speech':'没听到声音','audio-capture':'找不到麦克风','network':'网络异常'};
+    $('status').textContent = map[e.error]||('出错：'+e.error);
+  };
+  r.onend=()=>{
+    recognizing=false; setMicUI(false);
+    if(transcript.trim()) evaluate(transcript);
+    else if($('status').textContent==='请朗读') $('status').textContent='没有识别到语音';
+  };
+  return r;
+}
+
+function setMicUI(on){
+  $('micBtn').classList.toggle('rec', on);
+  $('micBtn').textContent = on ? '🎙 正在听…' : '🎤 开始跟读';
+}
+
+async function initNativeRecognition(){
+  if(!SRP) { $('tip').textContent='原生识别插件未加载'; return; }
+
+  await SRP.addListener('partialResults', data=>{
+    if(data.matches && data.matches.length){
+      transcript = data.matches[0];
+      $('status').textContent = '识别中：' + transcript;
+    }
+  });
+
+  await SRP.addListener('listeningState', data=>{
+    if(data.status === 'started'){
+      recognizing = true; setMicUI(true); $('status').textContent='请朗读';
+    } else if(data.status === 'stopped'){
+      recognizing = false; setMicUI(false);
+      if(transcript.trim()) evaluate(transcript);
+      else $('status').textContent='没有识别到语音';
+    }
+  });
+}
+
+async function startRecognition(){
+  transcript='';
+
+  if(isNative && SRP){
+    try{
+      const perm = await SRP.requestPermissions();
+      if(perm.speechRecognition !== 'granted'){
+        $('status').textContent='麦克风权限未授予';
+        return;
+      }
+      const avail = await SRP.available();
+      if(!avail.available){
+        $('status').textContent='本机语音识别不可用';
+        return;
+      }
+      if(recognizing){
+        await SRP.stop().catch(()=>{});
+        return;
+      }
+      await SRP.start({ language:'en-US', maxResults:1, partialResults:true, popup:false });
+    }catch(e){
+      $('status').textContent = '识别启动失败：' + (e.message||e);
+    }
+    return;
+  }
+
+  if(!recog) recog = initWebRecognition();
+  if(!recog){ $('status').textContent='当前浏览器不支持语音识别'; return; }
+  if(recognizing){ recog.stop(); return; }
+  try{ recog.start(); }catch(e){ $('status').textContent='启动失败，稍后重试'; }
+}
+
+function evaluate(said){
+  const rawWords = cur.en.split(/\s+/);
+  const tw = rawWords.map(normWord).filter(Boolean);
+  const sw = words(said);
+
+  const dist = lev(tw, sw);
+  const score = Math.max(0, Math.round((1 - dist/Math.max(tw.length,1)) * 100));
+  const marks = lcsMark(tw, sw);
+
+  $('target').innerHTML = rawWords
+    .map((w,i)=>`<span class="${marks[i]?'hit':'miss'}">${w}</span>`).join(' ');
+
+  const sc = $('score');
+  sc.textContent = score + ' 分';
+  sc.className = 'score ' + (score>=85?'good':score>=60?'mid':'bad');
+
+  $('heard').innerHTML = '你说的是：<b>' + said.replace(/</g,'&lt;') + '</b>';
+  $('result').classList.add('show');
+
+  stats.done++; stats.sum += score;
+  $('stats').textContent = `已完成 ${stats.done} 题`;
+  $('avg').textContent = `平均分 ${Math.round(stats.sum/stats.done)}`;
+  $('status').textContent = score>=85?'👏 很棒！':score>=60?'还可以，再练一次':'再接再厉 💪';
+}
+
+const list = () => DATA[mode];
+
+function render(){
+  cur = list()[idx];
+  $('progressText').textContent = `${idx+1} / ${list().length}`;
+  $('target').textContent = cur.en;
+  $('zh').textContent = cur.zh;
+  $('zh').classList.remove('show');
+  $('result').classList.remove('show');
+  $('status').textContent = '';
+  $('score').textContent = '--';
+}
+
+$('playBtn').onclick = speak;
+$('micBtn').onclick = startRecognition;
+$('nextBtn').onclick = ()=>{ idx=(idx+1)%list().length; render(); };
+$('hintBtn').onclick = ()=> $('zh').classList.toggle('show');
+
+document.querySelectorAll('.tab').forEach(tab=>{
+  tab.onclick = ()=>{
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    tab.classList.add('active');
+    mode = tab.dataset.mode; idx = 0; render();
+  };
+});
+
+(async function boot(){
+  if(isNative){
+    $('tip').textContent = '原生模式：系统语音引擎';
+    await initNativeRecognition();
+  }else{
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if(!SR) $('tip').textContent = '当前浏览器不支持语音识别，建议用 Chrome / Edge，或安装 App 版。';
+  }
+  render();
+})();
+</script>
+</body>
+</html>

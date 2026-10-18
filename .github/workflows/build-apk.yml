@@ -23,9 +23,11 @@ jobs:
           distribution: temurin
           java-version: 17
 
-            - name: Install dependencies
+      - name: Install dependencies
         run: |
+          echo "===== 开始打印当前目录结构 ====="
           ls -la
+          echo "===== 开始安装依赖 ====="
           npm install
 
       - name: Add Android platform

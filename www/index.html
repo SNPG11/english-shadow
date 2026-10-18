@@ -190,7 +190,6 @@ function setMicUI(on){
   $('micBtn').textContent = on ? '🎙 正在听…' : '🎤 开始跟读';
 }
 
-// 原生模式不再需要事件监听，直接通过 start 返回值获取结果
 async function initNativeRecognition(){
   if(!SRP) { $('tip').textContent='原生识别插件未加载'; return; }
 }
@@ -208,15 +207,13 @@ async function startRecognition(){
       
       $('status').textContent = '请在弹出的窗口中说话';
       
-      // 使用系统原生弹窗，关闭 partialResults，直接拿最终结果
       const result = await SRP.start({
         language: 'en-US',
         maxResults: 1,
-        partialResults: false,  // 关键：必须关闭
-        popup: true             // 关键：启用系统弹窗
+        partialResults: false,
+        popup: true
       });
       
-      // 弹窗结束后判断结果
       if (result && result.matches && result.matches.length > 0) {
         transcript = result.matches[0];
         evaluate(transcript);

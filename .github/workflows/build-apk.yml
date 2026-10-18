@@ -24,11 +24,7 @@ jobs:
           java-version: 17
 
       - name: Install dependencies
-        run: |
-          echo "===== 开始打印当前目录结构 ====="
-          ls -la
-          echo "===== 开始安装依赖 ====="
-          npm install
+        run: npm install
 
       - name: Add Android platform
         run: npx cap add android
@@ -36,10 +32,11 @@ jobs:
       - name: Sync web assets
         run: npx cap sync
 
-       - name: Inject microphone permission and queries
+      - name: Inject microphone permission
         run: |
           MANIFEST=android/app/src/main/AndroidManifest.xml
-          sed -i 's|<application|<uses-permission android:name="android.permission.RECORD_AUDIO" />\n    <queries>\n        <intent>\n            <action android:name="android.speech.RecognitionService" />\n        </intent>\n        <intent>\n            <action android:name="android.speech.action.RECOGNIZE_SPEECH" />\n        </intent>\n        <intent>\n            <action android:name="android.intent.action.TTS_SERVICE" />\n        </intent>\n    </queries>\n    <application|' $MANIFEST
+          sed -i 's|<application|<uses-permission android:name="android.permission.RECORD_AUDIO" />\n    <queries>\n        <intent>\n            <action android:name="android.speech.RecognitionService" />\n        </intent>\n        <intent>\n            <action android:name="android.intent.action.TTS_SERVICE" />\n        </intent>\n    </queries>\n    <application|' $MANIFEST
+
       - name: Build APK
         run: cd android && chmod +x gradlew && ./gradlew assembleDebug
 

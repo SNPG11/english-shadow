@@ -194,8 +194,10 @@ async function initNativeRecognition(){
   if(!SRP) { $('tip').textContent='原生识别插件未加载'; return; }
 
   await SRP.addListener('partialResults', data=>{
-    if(data.matches && data.matches.length){
-      transcript = data.matches[0];
+    // 兼容 data.matches 和 data.value 两种返回格式
+    const matchText = data.matches ? data.matches[0] : (data.value || '');
+    if(matchText){
+      transcript = matchText;
       $('status').textContent = '识别中：' + transcript;
     }
   });
@@ -206,11 +208,10 @@ async function initNativeRecognition(){
     } else if(data.status === 'stopped'){
       recognizing = false; setMicUI(false);
       if(transcript.trim()) evaluate(transcript);
-      else $('status').textContent='没有识别到语音';
+      else if($('status').textContent === '请朗读') $('status').textContent='没有识别到语音';
     }
   });
 
-  // 新增：监听报错
   await SRP.addListener('error', (err) => {
     console.error('识别报错:', err);
     recognizing = false; setMicUI(false);
@@ -228,17 +229,19 @@ async function startRecognition(){
         $('status').textContent='麦克风权限未授予';
         return;
       }
+      
       const avail = await SRP.available();
       if(!avail.available){
-        $('status').textContent='本机语音识别不可用';
+        $('status').textContent='本机语音识别引擎不可用';
         return;
       }
+      
       if(recognizing){
         await SRP.stop().catch(()=>{});
         return;
       }
-      // 修改点：将 popup 设为 true
-      await SRP.start({ language:'en-US', maxResults:1, partialResults:true, popup:true });
+      // 修复：popup 为 false 防止闪退
+      await SRP.start({ language:'en-US', maxResults:1, partialResults:true, popup:false });
     }catch(e){
       $('status').textContent = '识别启动失败：' + (e.message||e);
     }

@@ -23,8 +23,10 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Install dependencies
-        run: npm install
+            - name: Install dependencies
+        run: |
+          ls -la
+          npm install
 
       - name: Add Android platform
         run: npx cap add android

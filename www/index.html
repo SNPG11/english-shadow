@@ -209,6 +209,13 @@ async function initNativeRecognition(){
       else $('status').textContent='没有识别到语音';
     }
   });
+
+  // 新增：监听报错
+  await SRP.addListener('error', (err) => {
+    console.error('识别报错:', err);
+    recognizing = false; setMicUI(false);
+    $('status').textContent = '识别报错：' + (err.message || JSON.stringify(err));
+  });
 }
 
 async function startRecognition(){
@@ -230,7 +237,8 @@ async function startRecognition(){
         await SRP.stop().catch(()=>{});
         return;
       }
-      await SRP.start({ language:'en-US', maxResults:1, partialResults:true, popup:false });
+      // 修改点：将 popup 设为 true
+      await SRP.start({ language:'en-US', maxResults:1, partialResults:true, popup:true });
     }catch(e){
       $('status').textContent = '识别启动失败：' + (e.message||e);
     }

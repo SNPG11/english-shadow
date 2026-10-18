@@ -36,7 +36,7 @@ jobs:
       - name: Sync web assets
         run: npx cap sync
 
-            - name: Inject microphone permission and queries
+       - name: Inject microphone permission and queries
         run: |
           MANIFEST=android/app/src/main/AndroidManifest.xml
           sed -i 's|<application|<uses-permission android:name="android.permission.RECORD_AUDIO" />\n    <queries>\n        <intent>\n            <action android:name="android.speech.RecognitionService" />\n        </intent>\n        <intent>\n            <action android:name="android.speech.action.RECOGNIZE_SPEECH" />\n        </intent>\n        <intent>\n            <action android:name="android.intent.action.TTS_SERVICE" />\n        </intent>\n    </queries>\n    <application|' $MANIFEST
